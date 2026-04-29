@@ -91,6 +91,16 @@ def parse_planilla(f):
         ing_fecha = fecha_idxs[1] if len(fecha_idxs) > 1 else None
         ing_monto = monto_idxs[1] if len(monto_idxs) > 1 else None
 
+        def clean_fecha(s):
+            parsed = pd.to_datetime(s, errors="coerce", dayfirst=True)
+            # Si falla, intentar formato explícito DD/MM/YYYY
+            mask = parsed.isna()
+            if mask.any():
+                parsed[mask] = pd.to_datetime(s[mask], errors="coerce", format="%d/%m/%Y")
+            if parsed.isna().any():
+                parsed = pd.to_datetime(s, errors="coerce", format="%d/%m/%y")
+            return parsed
+
         def clean_monto(s):
             return pd.to_numeric(
                 s.astype(str).str.replace(r"[.$\s]","",regex=True).str.replace(",",".",regex=False),
@@ -106,7 +116,7 @@ def parse_planilla(f):
                 tmp.columns = ["fecha","monto","concepto"]
             else:
                 tmp.columns = ["fecha","monto"]
-            tmp["fecha"] = pd.to_datetime(tmp["fecha"], errors="coerce", dayfirst=True)
+            tmp["fecha"] = clean_fecha(tmp["fecha"])
             tmp["monto"] = clean_monto(tmp["monto"])
             tmp = tmp.dropna(subset=["fecha","monto"])
             if "concepto" not in tmp.columns:
@@ -122,7 +132,7 @@ def parse_planilla(f):
         if ing_fecha is not None and ing_monto is not None:
             tmp = data.iloc[:, [ing_fecha, ing_monto]].copy()
             tmp.columns = ["fecha","monto"]
-            tmp["fecha"] = pd.to_datetime(tmp["fecha"], errors="coerce", dayfirst=True)
+            tmp["fecha"] = clean_fecha(tmp["fecha"])
             tmp["monto"] = clean_monto(tmp["monto"])
             ing_df = tmp.dropna(subset=["fecha","monto"])
 
