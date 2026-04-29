@@ -125,13 +125,11 @@ def chart_main(months, ing, egr, net):
     fig.add_trace(go.Bar(name="Ingresos", x=lbls, y=ing, marker_color=COLOR_ING, marker_line_width=0, opacity=0.9))
     fig.add_trace(go.Bar(name="Egresos", x=lbls, y=egr, marker_color=COLOR_EGR, marker_line_width=0, opacity=0.9))
     fig.add_trace(go.Scatter(name="Ganancia neta", x=lbls, y=net, mode="lines+markers",
-                             line=dict(color=COLOR_NET, width=2.5), marker=dict(size=7, color=COLOR_NET),
-                             yaxis="y2"))
+                             line=dict(color=COLOR_NET, width=2.5), marker=dict(size=7, color=COLOR_NET)))
     fig.update_layout(**base_layout(
         barmode="group", height=320,
         legend=dict(orientation="h", y=1.12, x=0, bgcolor="rgba(0,0,0,0)", font_size=12),
         yaxis=dict(tickprefix="$", tickformat=",.0f", gridcolor=GRID_COLOR),
-        yaxis2=dict(overlaying="y", side="right", tickprefix="$", tickformat=",.0f", showgrid=False),
     ))
     return style_ax(fig)
 
