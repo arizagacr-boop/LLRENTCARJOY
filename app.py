@@ -283,7 +283,7 @@ st.markdown(f"""
   </div>
   <div>
     <div style="font-size:1.7rem;font-weight:600;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">LL Rent a Car Joy</div>
-    <div style="font-size:13px;color:#c9a844;margin-top:4px;letter-spacing:0.8px;text-transform:uppercase;">Dashboard Financiero · Ingresos & Egresos</div>
+
   </div>
 </div>
 """, unsafe_allow_html=True)
