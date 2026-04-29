@@ -69,7 +69,7 @@ def parse_planilla(f):
         else:
             raw = pd.read_excel(f, header=None)
 
-        # Encontrar fila de encabezados buscando "Fecha" o "fecha"
+        # Encontrar fila de encabezados
         header_row = 0
         for i, row in raw.iterrows():
             vals = [str(v).strip().lower() for v in row.values]
@@ -77,51 +77,54 @@ def parse_planilla(f):
                 header_row = i
                 break
 
-        df = raw.iloc[header_row:].copy()
-        df.columns = [str(v).strip() for v in df.iloc[0].values]
-        df = df.iloc[1:].reset_index(drop=True)
+        headers = [str(v).strip().lower() for v in raw.iloc[header_row].values]
+        data = raw.iloc[header_row+1:].reset_index(drop=True)
 
-        # Detectar columnas de EGRESOS (izquierda): Fecha, Concepto, Monto
-        cols = list(df.columns)
-        egr_fecha_col = next((c for c in cols if str(c).lower() == "fecha"), None)
-        egr_monto_col = next((c for c in cols if str(c).lower() == "monto"), None)
-        egr_concepto_col = next((c for c in cols if str(c).lower() in ["concepto","categoria","category","descripcion"]), None)
+        # Encontrar indices por nombre — buscar primera y segunda ocurrencia
+        fecha_idxs  = [i for i,h in enumerate(headers) if h == "fecha"]
+        monto_idxs  = [i for i,h in enumerate(headers) if h in ["monto","amount","importe","total"]]
+        conc_idxs   = [i for i,h in enumerate(headers) if h in ["concepto","categoria","descripcion","category"]]
 
-        # Detectar columnas de INGRESOS (derecha): buscar segunda ocurrencia de Fecha/Monto
-        fecha_cols = [c for c in cols if str(c).lower() == "fecha"]
-        monto_cols = [c for c in cols if str(c).lower() == "monto"]
+        egr_fecha = fecha_idxs[0] if len(fecha_idxs) > 0 else None
+        egr_monto = monto_idxs[0] if len(monto_idxs) > 0 else None
+        egr_conc  = conc_idxs[0]  if len(conc_idxs)  > 0 else None
+        ing_fecha = fecha_idxs[1] if len(fecha_idxs) > 1 else None
+        ing_monto = monto_idxs[1] if len(monto_idxs) > 1 else None
 
-        ing_fecha_col = fecha_cols[1] if len(fecha_cols) > 1 else None
-        ing_monto_col = monto_cols[1] if len(monto_cols) > 1 else None
+        def clean_monto(s):
+            return pd.to_numeric(
+                s.astype(str).str.replace(r"[.$\s]","",regex=True).str.replace(",",".",regex=False),
+                errors="coerce"
+            )
 
-        # Si hay columnas duplicadas con sufijos automáticos de pandas
-        if ing_fecha_col is None:
-            ing_fecha_col = next((c for c in cols if "fecha" in str(c).lower() and c != egr_fecha_col), None)
-        if ing_monto_col is None:
-            ing_monto_col = next((c for c in cols if "monto" in str(c).lower() and c != egr_monto_col), None)
-
-        # Armar DF egresos
+        # DF egresos
         egr_df = pd.DataFrame()
-        if egr_fecha_col and egr_monto_col:
-            egr_df = df[[egr_fecha_col, egr_monto_col] + ([egr_concepto_col] if egr_concepto_col else [])].copy()
-            egr_df.columns = ["fecha","monto"] + (["concepto"] if egr_concepto_col else [])
-            egr_df["fecha"] = pd.to_datetime(egr_df["fecha"], errors="coerce", dayfirst=True)
-            egr_df["monto"] = pd.to_numeric(egr_df["monto"].astype(str).str.replace(r"[.$]","",regex=True).str.replace(",",".",regex=False), errors="coerce")
-            egr_df = egr_df.dropna(subset=["fecha","monto"])
-            if "concepto" not in egr_df.columns:
-                egr_df["concepto"] = "Sin categoría"
+        if egr_fecha is not None and egr_monto is not None:
+            cols = [egr_fecha, egr_monto] + ([egr_conc] if egr_conc is not None else [])
+            tmp = data.iloc[:, cols].copy()
+            if egr_conc is not None:
+                tmp.columns = ["fecha","monto","concepto"]
             else:
-                egr_df["concepto"] = egr_df["concepto"].fillna("Sin categoría").astype(str).str.strip()
-                egr_df = egr_df[~egr_df["concepto"].str.lower().isin(["agregar peajes","agregar seguro","mas gastos ?","nan",""])]
+                tmp.columns = ["fecha","monto"]
+            tmp["fecha"] = pd.to_datetime(tmp["fecha"], errors="coerce", dayfirst=True)
+            tmp["monto"] = clean_monto(tmp["monto"])
+            tmp = tmp.dropna(subset=["fecha","monto"])
+            if "concepto" not in tmp.columns:
+                tmp["concepto"] = "Sin categoría"
+            else:
+                tmp["concepto"] = tmp["concepto"].fillna("Sin categoría").astype(str).str.strip()
+                noise = ["agregar peajes","agregar seguro","mas gastos ?","nan","","none"]
+                tmp = tmp[~tmp["concepto"].str.lower().isin(noise)]
+            egr_df = tmp
 
-        # Armar DF ingresos
+        # DF ingresos
         ing_df = pd.DataFrame()
-        if ing_fecha_col and ing_monto_col:
-            ing_df = df[[ing_fecha_col, ing_monto_col]].copy()
-            ing_df.columns = ["fecha","monto"]
-            ing_df["fecha"] = pd.to_datetime(ing_df["fecha"], errors="coerce", dayfirst=True)
-            ing_df["monto"] = pd.to_numeric(ing_df["monto"].astype(str).str.replace(r"[.$]","",regex=True).str.replace(",",".",regex=False), errors="coerce")
-            ing_df = ing_df.dropna(subset=["fecha","monto"])
+        if ing_fecha is not None and ing_monto is not None:
+            tmp = data.iloc[:, [ing_fecha, ing_monto]].copy()
+            tmp.columns = ["fecha","monto"]
+            tmp["fecha"] = pd.to_datetime(tmp["fecha"], errors="coerce", dayfirst=True)
+            tmp["monto"] = clean_monto(tmp["monto"])
+            ing_df = tmp.dropna(subset=["fecha","monto"])
 
         return ing_df, egr_df
 
