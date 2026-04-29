@@ -50,6 +50,7 @@ CE = "#ff3333"
 CN = "#00cc88"
 CA = "#aa44ff"
 TC = "#a0b4ff"
+CAT_COLORS = ["#1a56ff","#ff3333","#00cc88","#ffaa00","#aa44ff","#ff6699","#00ccff","#ff9933","#66ff99","#cc44ff"]
 
 plt.rcParams.update({
     "figure.facecolor": BG, "axes.facecolor": BG,
@@ -59,36 +60,93 @@ plt.rcParams.update({
     "grid.linestyle": "--", "grid.linewidth": 0.5,
 })
 
-def get_demo():
-    ing={1:380000,2:420000,3:390000,4:510000,5:475000,6:560000,7:640000,8:620000,9:490000,10:530000,11:480000,12:610000}
-    egr={1:180000,2:195000,3:210000,4:230000,5:220000,6:260000,7:290000,8:275000,9:235000,10:250000,11:240000,12:280000}
-    ri, re = [], []
-    import random; random.seed(42)
-    for m,t in ing.items():
-        n=random.randint(8,14)
-        for i in range(n): ri.append({"fecha":pd.Timestamp(f"2024-{m:02d}-{min(i*2+1,28):02d}"),"monto":round(t/n)})
-    for m,t in egr.items():
-        n=random.randint(4,7)
-        for i in range(n): re.append({"fecha":pd.Timestamp(f"2024-{m:02d}-{min(i*3+1,28):02d}"),"monto":round(t/n)})
-    return pd.DataFrame(ri), pd.DataFrame(re)
-
-def parse_file(f):
+# ── PARSE PLANILLA ÚNICA ───────────────────────────────────────────────────────
+def parse_planilla(f):
     try:
         name = f.name.lower()
-        df = pd.read_csv(f, encoding="utf-8-sig") if name.endswith(".csv") else pd.read_excel(f)
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        fc = next((c for c in df.columns if "fecha" in c or "date" in c), None)
-        mc = next((c for c in df.columns if any(k in c for k in ["monto","amount","importe","valor","total"])), None)
-        if not fc or not mc:
-            st.error(f"Columnas no encontradas. Disponibles: {list(df.columns)}"); return pd.DataFrame()
-        df = df[[fc,mc]].copy(); df.columns = ["fecha","monto"]
-        df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce", dayfirst=True)
-        df["monto"] = pd.to_numeric(df["monto"].astype(str).str.replace(r"[$\.](?=\d{3})","",regex=True).str.replace(",",".",regex=False), errors="coerce")
-        return df.dropna()
-    except Exception as e:
-        st.error(f"Error: {e}"); return pd.DataFrame()
+        if name.endswith(".csv"):
+            raw = pd.read_csv(f, header=None, encoding="utf-8-sig")
+        else:
+            raw = pd.read_excel(f, header=None)
 
-def agg(df):
+        # Encontrar fila de encabezados buscando "Fecha" o "fecha"
+        header_row = 0
+        for i, row in raw.iterrows():
+            vals = [str(v).strip().lower() for v in row.values]
+            if "fecha" in vals:
+                header_row = i
+                break
+
+        df = raw.iloc[header_row:].copy()
+        df.columns = [str(v).strip() for v in df.iloc[0].values]
+        df = df.iloc[1:].reset_index(drop=True)
+
+        # Detectar columnas de EGRESOS (izquierda): Fecha, Concepto, Monto
+        cols = list(df.columns)
+        egr_fecha_col = next((c for c in cols if str(c).lower() == "fecha"), None)
+        egr_monto_col = next((c for c in cols if str(c).lower() == "monto"), None)
+        egr_concepto_col = next((c for c in cols if str(c).lower() in ["concepto","categoria","category","descripcion"]), None)
+
+        # Detectar columnas de INGRESOS (derecha): buscar segunda ocurrencia de Fecha/Monto
+        fecha_cols = [c for c in cols if str(c).lower() == "fecha"]
+        monto_cols = [c for c in cols if str(c).lower() == "monto"]
+
+        ing_fecha_col = fecha_cols[1] if len(fecha_cols) > 1 else None
+        ing_monto_col = monto_cols[1] if len(monto_cols) > 1 else None
+
+        # Si hay columnas duplicadas con sufijos automáticos de pandas
+        if ing_fecha_col is None:
+            ing_fecha_col = next((c for c in cols if "fecha" in str(c).lower() and c != egr_fecha_col), None)
+        if ing_monto_col is None:
+            ing_monto_col = next((c for c in cols if "monto" in str(c).lower() and c != egr_monto_col), None)
+
+        # Armar DF egresos
+        egr_df = pd.DataFrame()
+        if egr_fecha_col and egr_monto_col:
+            egr_df = df[[egr_fecha_col, egr_monto_col] + ([egr_concepto_col] if egr_concepto_col else [])].copy()
+            egr_df.columns = ["fecha","monto"] + (["concepto"] if egr_concepto_col else [])
+            egr_df["fecha"] = pd.to_datetime(egr_df["fecha"], errors="coerce", dayfirst=True)
+            egr_df["monto"] = pd.to_numeric(egr_df["monto"].astype(str).str.replace(r"[.$]","",regex=True).str.replace(",",".",regex=False), errors="coerce")
+            egr_df = egr_df.dropna(subset=["fecha","monto"])
+            if "concepto" not in egr_df.columns:
+                egr_df["concepto"] = "Sin categoría"
+            else:
+                egr_df["concepto"] = egr_df["concepto"].fillna("Sin categoría").astype(str).str.strip()
+                egr_df = egr_df[~egr_df["concepto"].str.lower().isin(["agregar peajes","agregar seguro","mas gastos ?","nan",""])]
+
+        # Armar DF ingresos
+        ing_df = pd.DataFrame()
+        if ing_fecha_col and ing_monto_col:
+            ing_df = df[[ing_fecha_col, ing_monto_col]].copy()
+            ing_df.columns = ["fecha","monto"]
+            ing_df["fecha"] = pd.to_datetime(ing_df["fecha"], errors="coerce", dayfirst=True)
+            ing_df["monto"] = pd.to_numeric(ing_df["monto"].astype(str).str.replace(r"[.$]","",regex=True).str.replace(",",".",regex=False), errors="coerce")
+            ing_df = ing_df.dropna(subset=["fecha","monto"])
+
+        return ing_df, egr_df
+
+    except Exception as e:
+        st.error(f"Error leyendo planilla: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+# ── DEMO DATA ──────────────────────────────────────────────────────────────────
+def get_demo():
+    categorias = ["Nafta","Mecánico","Seguro","Peajes","GPS","Lavado","Patente"]
+    ing_rows, egr_rows = [], []
+    import random; random.seed(42)
+    ing_totals = {1:380000,2:420000,3:390000,4:510000,5:475000,6:560000,7:640000,8:620000,9:490000,10:530000,11:480000,12:610000}
+    egr_totals = {1:180000,2:195000,3:210000,4:230000,5:220000,6:260000,7:290000,8:275000,9:235000,10:250000,11:240000,12:280000}
+    for m,t in ing_totals.items():
+        n=random.randint(6,12)
+        for i in range(n): ing_rows.append({"fecha":pd.Timestamp(f"2024-{m:02d}-{min(i*2+1,28):02d}"),"monto":round(t/n)})
+    for m,t in egr_totals.items():
+        n=random.randint(4,8)
+        for i in range(n):
+            egr_rows.append({"fecha":pd.Timestamp(f"2024-{m:02d}-{min(i*3+1,28):02d}"),
+                             "monto":round(t/n),"concepto":random.choice(categorias)})
+    return pd.DataFrame(ing_rows), pd.DataFrame(egr_rows)
+
+def agg_monthly(df):
     if df.empty: return {}
     d = df.copy(); d["mes"] = d["fecha"].dt.month
     return d.groupby("mes")["monto"].sum().to_dict()
@@ -98,55 +156,49 @@ def fmt(n): return f"${n:,.0f}".replace(",",".")
 def fig_to_img(fig):
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=130, bbox_inches="tight", facecolor=BG)
-    buf.seek(0)
-    plt.close(fig)
-    return buf
+    buf.seek(0); plt.close(fig); return buf
 
+# ── CHARTS ─────────────────────────────────────────────────────────────────────
 def chart_main(months, ing, egr, net):
     lbls = [MONTHS_ES[m] for m in months]
-    x = np.arange(len(lbls))
-    w = 0.35
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.bar(x - w/2, ing, w, color=CI, alpha=0.9, label="Ingresos")
-    ax.bar(x + w/2, egr, w, color=CE, alpha=0.9, label="Egresos")
+    x = np.arange(len(lbls)); w = 0.35
+    fig, ax = plt.subplots(figsize=(10,4))
+    ax.bar(x-w/2, ing, w, color=CI, alpha=0.9, label="Ingresos")
+    ax.bar(x+w/2, egr, w, color=CE, alpha=0.9, label="Egresos")
     ax2 = ax.twinx()
     ax2.plot(x, net, color=CN, linewidth=2.5, marker="o", markersize=6, label="Ganancia neta")
     ax2.set_ylabel("Ganancia neta", color=CN, fontsize=10)
     ax2.tick_params(colors=CN)
-    ax2.spines["right"].set_color("#1a1aff33")
-    ax2.yaxis.set_tick_params(colors=CN)
     for spine in ax2.spines.values(): spine.set_edgecolor("#1a1aff22")
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
     ax.set_xticks(x); ax.set_xticklabels(lbls, fontsize=10)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
     ax.grid(axis="y"); ax.set_axisbelow(True)
     for spine in ax.spines.values(): spine.set_edgecolor("#1a1aff22")
-    handles1 = [mpatches.Patch(color=CI, label="Ingresos"), mpatches.Patch(color=CE, label="Egresos")]
-    handles2 = [plt.Line2D([0],[0], color=CN, linewidth=2, marker="o", markersize=5, label="Ganancia neta")]
-    ax.legend(handles=handles1+handles2, loc="upper left", framealpha=0.1, labelcolor=TC, fontsize=10)
-    fig.tight_layout()
-    return fig_to_img(fig)
+    h1 = [mpatches.Patch(color=CI,label="Ingresos"), mpatches.Patch(color=CE,label="Egresos")]
+    h2 = [plt.Line2D([0],[0],color=CN,linewidth=2,marker="o",markersize=5,label="Ganancia neta")]
+    ax.legend(handles=h1+h2, loc="upper left", framealpha=0.1, labelcolor=TC, fontsize=10)
+    fig.tight_layout(); return fig_to_img(fig)
 
 def chart_acum(months, net):
     lbls = [MONTHS_ES[m] for m in months]
     acum = list(np.cumsum(net))
-    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig, ax = plt.subplots(figsize=(6,3.5))
     ax.fill_between(range(len(lbls)), acum, alpha=0.15, color=CA)
     ax.plot(range(len(lbls)), acum, color=CA, linewidth=2.5, marker="o", markersize=6)
     ax.set_xticks(range(len(lbls))); ax.set_xticklabels(lbls, fontsize=10)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
     ax.grid(axis="y"); ax.set_axisbelow(True)
     for spine in ax.spines.values(): spine.set_edgecolor("#1a1aff22")
-    fig.tight_layout()
-    return fig_to_img(fig)
+    fig.tight_layout(); return fig_to_img(fig)
 
 def chart_margen(months, ing, net):
     lbls = [MONTHS_ES[m] for m in months]
     mgn = [round(n/i*100,1) if i else 0 for n,i in zip(net,ing)]
     colors = [CN if m>=30 else "#ffaa00" if m>0 else CE for m in mgn]
-    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig, ax = plt.subplots(figsize=(6,3.5))
     bars = ax.bar(range(len(lbls)), mgn, color=colors, alpha=0.9)
-    for bar, val in zip(bars, mgn):
+    for bar,val in zip(bars,mgn):
         ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.5, f"{val}%",
                 ha="center", va="bottom", fontsize=9, color=TC)
     ax.axhline(0, color="#1a1aff33", linewidth=1)
@@ -154,18 +206,34 @@ def chart_margen(months, ing, net):
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"{v:.0f}%"))
     ax.grid(axis="y"); ax.set_axisbelow(True)
     for spine in ax.spines.values(): spine.set_edgecolor("#1a1aff22")
-    fig.tight_layout()
-    return fig_to_img(fig)
+    fig.tight_layout(); return fig_to_img(fig)
 
-def chart_donut(ti, te):
-    pct = round(te/ti*100) if ti else 0
-    fig, ax = plt.subplots(figsize=(3, 3))
-    wedges, _ = ax.pie([ti, te], colors=[CI, CE], startangle=90,
-                       wedgeprops=dict(width=0.5, edgecolor=BG, linewidth=2))
-    ax.text(0, 0, f"{pct}%\ncosto", ha="center", va="center",
-            fontsize=13, fontweight="bold", color="#ffffff")
-    fig.tight_layout()
-    return fig_to_img(fig)
+def chart_categorias(egr_df):
+    if egr_df.empty or "concepto" not in egr_df.columns: return None
+    cat = egr_df.groupby("concepto")["monto"].sum().sort_values(ascending=False)
+    if cat.empty: return None
+    colors = CAT_COLORS[:len(cat)]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    # Barras horizontales
+    bars = ax1.barh(cat.index[::-1], cat.values[::-1], color=colors[::-1], alpha=0.9)
+    for bar, val in zip(bars, cat.values[::-1]):
+        ax1.text(bar.get_width()+max(cat.values)*0.01, bar.get_y()+bar.get_height()/2,
+                 fmt(val), va="center", fontsize=9, color=TC)
+    ax1.set_xlabel("Monto ($)", color=TC, fontsize=10)
+    ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
+    ax1.grid(axis="x"); ax1.set_axisbelow(True)
+    for spine in ax1.spines.values(): spine.set_edgecolor("#1a1aff22")
+    # Donut
+    wedges, texts, autotexts = ax2.pie(
+        cat.values, labels=None, colors=colors,
+        autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
+        pctdistance=0.75, startangle=90,
+        wedgeprops=dict(width=0.55, edgecolor=BG, linewidth=2)
+    )
+    for at in autotexts: at.set_color("#ffffff"); at.set_fontsize(9)
+    ax2.legend(cat.index, loc="center left", bbox_to_anchor=(1,0.5),
+               framealpha=0.1, labelcolor=TC, fontsize=9)
+    fig.tight_layout(); return fig_to_img(fig)
 
 def build_excel(months, ing, egr, net, year):
     from openpyxl import Workbook
@@ -207,41 +275,42 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### ⚙️ Configuración")
     st.markdown("---")
-    st.markdown("**📂 Tus archivos**")
-    ing_file = st.file_uploader("Ingresos (CSV / Excel)", type=["csv","xlsx","xls"], key="ing")
-    egr_file = st.file_uploader("Egresos (CSV / Excel)", type=["csv","xlsx","xls"], key="egr")
+    st.markdown("**📂 Tu planilla**")
+    planilla_file = st.file_uploader("Subí tu planilla Excel o CSV", type=["xlsx","xls","csv"], key="planilla")
     st.markdown("---")
     st.markdown("**📅 Período**")
-    year_sel = st.selectbox("Año", [2024,2025,2026], index=0)
+    year_sel = st.selectbox("Año", [2025,2026,2024], index=0)
     months_sel = st.multiselect("Meses", list(range(1,13)), default=list(range(1,13)), format_func=lambda m: MONTHS_ES[m])
     st.markdown("---")
-    with st.expander("📌 ¿Cómo preparar mis datos?"):
+    with st.expander("📌 Formato esperado"):
         st.markdown("""
-Tu archivo necesita **dos columnas**:
+Tu planilla debe tener esta estructura:
 
-| fecha | monto |
-|-------|-------|
-| 01/01/2024 | 45000 |
+**Egresos** (columnas A, B, C):
+- `Fecha` | `Concepto` | `Monto`
 
-Formatos: **CSV** o **Excel (.xlsx)**
+**Ingresos** (columnas H, I o a la derecha):
+- `Fecha` | `Monto`
+
+Ambas secciones en la **misma hoja**.
         """)
-    st.caption("LL Rent a Car Joy · v1.0")
+    st.caption("LL Rent a Car Joy · v2.0")
 
 # ── DATOS ──────────────────────────────────────────────────────────────────────
-using_demo = not ing_file and not egr_file
+using_demo = planilla_file is None
 if using_demo:
     ing_df, egr_df = get_demo()
+    st.info("📊 Mostrando **datos de ejemplo**. Cargá tu planilla en el panel lateral para ver tus números reales.")
 else:
-    ing_df = parse_file(ing_file) if ing_file else pd.DataFrame(columns=["fecha","monto"])
-    egr_df = parse_file(egr_file) if egr_file else pd.DataFrame(columns=["fecha","monto"])
-    if ing_df.empty and egr_df.empty: st.stop()
-    if not ing_df.empty: ing_df = ing_df[ing_df["fecha"].dt.year == year_sel]
-    if not egr_df.empty: egr_df = egr_df[egr_df["fecha"].dt.year == year_sel]
+    ing_df, egr_df = parse_planilla(planilla_file)
+    if ing_df.empty and egr_df.empty:
+        st.warning("No se pudieron leer los datos. Revisá el formato de tu planilla."); st.stop()
 
-if using_demo:
-    st.info("📊 Mostrando **datos de ejemplo**. Cargá tus archivos en el panel lateral para ver tus números reales.")
+# Filtrar por año
+if not ing_df.empty: ing_df = ing_df[ing_df["fecha"].dt.year == year_sel]
+if not egr_df.empty: egr_df = egr_df[egr_df["fecha"].dt.year == year_sel]
 
-im = agg(ing_df); em = agg(egr_df)
+im = agg_monthly(ing_df); em = agg_monthly(egr_df)
 all_months = sorted(set(list(im.keys()) + list(em.keys())))
 if months_sel: all_months = [m for m in all_months if m in months_sel]
 if not all_months: st.warning("No hay datos para el período seleccionado."); st.stop()
@@ -263,30 +332,34 @@ with k2:
     pe = round(te/ti*100) if ti else 0
     st.markdown(f'<div class="kpi-card red"><p class="kpi-label">Egresos totales</p><p class="kpi-value">{fmt(te)}</p><p class="kpi-delta neu">{pe}% de los ingresos</p></div>', unsafe_allow_html=True)
 with k3:
-    cc = "green" if tn>=0 else "red"; ic = "▲ Rentable" if tn>=0 else "▼ En pérdida"; dc = "pos" if tn>=0 else "neg"
+    cc="green" if tn>=0 else "red"; ic="▲ Rentable" if tn>=0 else "▼ En pérdida"; dc="pos" if tn>=0 else "neg"
     st.markdown(f'<div class="kpi-card {cc}"><p class="kpi-label">Ganancia neta</p><p class="kpi-value">{fmt(tn)}</p><p class="kpi-delta {dc}">{ic}</p></div>', unsafe_allow_html=True)
 with k4:
-    mc = "green" if mg>=30 else "amber" if mg>0 else "red"
+    mc="green" if mg>=30 else "amber" if mg>0 else "red"
     st.markdown(f'<div class="kpi-card {mc}"><p class="kpi-label">Margen neto</p><p class="kpi-value">{mg}%</p><p class="kpi-delta neu">Mejor: {MONTHS_ES[mejor]} · Peor: {MONTHS_ES[peor]}</p></div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── CHARTS ─────────────────────────────────────────────────────────────────────
+# ── CHART PRINCIPAL ────────────────────────────────────────────────────────────
 st.markdown('<p class="section-title">Ingresos vs Egresos</p>', unsafe_allow_html=True)
 st.image(chart_main(all_months, iv, ev, nv), use_container_width=True)
 
+# ── CHARTS SECUNDARIOS ─────────────────────────────────────────────────────────
 st.markdown('<p class="section-title">Análisis detallado</p>', unsafe_allow_html=True)
-c1, c2, c3 = st.columns([2,2,1])
+c1,c2 = st.columns(2)
 with c1:
     st.markdown("**Tendencia acumulada**")
     st.image(chart_acum(all_months, nv), use_container_width=True)
 with c2:
     st.markdown("**Margen mensual (%)**")
     st.image(chart_margen(all_months, iv, nv), use_container_width=True)
-with c3:
-    st.markdown("**Distribución**")
-    if ti > 0:
-        st.image(chart_donut(ti, te), use_container_width=True)
+
+# ── CATEGORÍAS EGRESOS ────────────────────────────────────────────────────────
+if not egr_df.empty and "concepto" in egr_df.columns:
+    st.markdown('<p class="section-title">Egresos por categoría</p>', unsafe_allow_html=True)
+    cat_img = chart_categorias(egr_df)
+    if cat_img:
+        st.image(cat_img, use_container_width=True)
 
 # ── TABLA ──────────────────────────────────────────────────────────────────────
 st.markdown("---")
@@ -294,10 +367,19 @@ st.markdown('<p class="section-title">Detalle mensual</p>', unsafe_allow_html=Tr
 rows = []
 for i,m in enumerate(all_months):
     i_=iv[i]; e_=ev[i]; n_=nv[i]; mg_=round(n_/i_*100,1) if i_ else 0
-    est = "✅ Excelente" if n_>0 and mg_>=30 else "🟡 Positivo" if n_>0 else "🔴 Negativo"
+    est="✅ Excelente" if n_>0 and mg_>=30 else "🟡 Positivo" if n_>0 else "🔴 Negativo"
     rows.append({"Mes":MONTHS_ES[m],"Ingresos":fmt(i_),"Egresos":fmt(e_),"Ganancia neta":fmt(n_),"Margen":f"{mg_}%","Estado":est})
 rows.append({"Mes":"TOTAL","Ingresos":fmt(ti),"Egresos":fmt(te),"Ganancia neta":fmt(tn),"Margen":f"{mg}%","Estado":"—"})
 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+# ── TABLA CATEGORÍAS ──────────────────────────────────────────────────────────
+if not egr_df.empty and "concepto" in egr_df.columns:
+    st.markdown('<p class="section-title">Detalle de egresos por categoría</p>', unsafe_allow_html=True)
+    cat_rows = egr_df.groupby("concepto")["monto"].agg(["sum","count"]).reset_index()
+    cat_rows.columns = ["Categoría","Total","Cantidad"]
+    cat_rows = cat_rows.sort_values("Total", ascending=False)
+    cat_rows["Total"] = cat_rows["Total"].apply(fmt)
+    st.dataframe(cat_rows, use_container_width=True, hide_index=True)
 
 # ── EXPORT ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
