@@ -175,7 +175,7 @@ def fig_to_img(fig):
 
 # ── CHARTS ─────────────────────────────────────────────────────────────────────
 def chart_main(months, ing, egr, net):
-    lbls = [MONTHS_ES[m] for m in months]
+    lbls = months
     x = np.arange(len(lbls)); w = 0.35
     fig, ax = plt.subplots(figsize=(10,4))
     ax.bar(x-w/2, ing, w, color=CI, alpha=0.9, label="Ingresos")
@@ -196,7 +196,7 @@ def chart_main(months, ing, egr, net):
     fig.tight_layout(); return fig_to_img(fig)
 
 def chart_acum(months, net):
-    lbls = [MONTHS_ES[m] for m in months]
+    lbls = months
     acum = list(np.cumsum(net))
     fig, ax = plt.subplots(figsize=(6,3.5))
     ax.fill_between(range(len(lbls)), acum, alpha=0.15, color=CA)
@@ -208,7 +208,7 @@ def chart_acum(months, net):
     fig.tight_layout(); return fig_to_img(fig)
 
 def chart_margen(months, ing, net):
-    lbls = [MONTHS_ES[m] for m in months]
+    lbls = months
     mgn = [round(n/i*100,1) if i else 0 for n,i in zip(net,ing)]
     colors = [CN if m>=30 else "#ffaa00" if m>0 else CE for m in mgn]
     fig, ax = plt.subplots(figsize=(6,3.5))
