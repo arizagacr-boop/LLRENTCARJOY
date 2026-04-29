@@ -267,4 +267,4 @@ with col_dl:
                        file_name=f"ll_rent_a_car_joy_{year_sel}.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 with col_info:
-    st.caption(f"Reporte generado el {datetime.now
+    st.caption(f"Reporte generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} · LL Rent a Car Joy")
