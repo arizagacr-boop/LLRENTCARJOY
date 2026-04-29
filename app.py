@@ -128,7 +128,7 @@ def chart_main(months, ing, egr, net):
                              line=dict(color=COLOR_NET, width=2.5), marker=dict(size=7, color=COLOR_NET)))
     fig.update_layout(**base_layout(
         barmode="group", height=320,
-        legend=dict(orientation="h", y=1.12, x=0, bgcolor="rgba(0,0,0,0)", font_size=12),
+        legend=dict(orientation="h", y=1.12, x=0, bgcolor="rgba(0,0,0,0)", font=dict(size=12)),
         yaxis=dict(tickprefix="$", tickformat=",.0f", gridcolor=GRID_COLOR),
     ))
     return style_ax(fig)
@@ -166,7 +166,7 @@ def chart_donut(total_ing, total_egr):
     pct_egr = round(total_egr/total_ing*100) if total_ing else 0
     fig.update_layout(**base_layout(showlegend=False, height=220,
         annotations=[dict(text=f"{pct_egr}%<br>costo", x=0.5, y=0.5,
-                         font_size=16, showarrow=False, font_color="#ffffff")]))
+                         font=dict(size=16, color="#ffffff"), showarrow=False)]))
     return fig
 
 # ── EXCEL EXPORT ───────────────────────────────────────────────────────────────
