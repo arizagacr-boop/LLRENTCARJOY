@@ -81,9 +81,9 @@ def parse_planilla(f):
         data = raw.iloc[header_row+1:].reset_index(drop=True)
 
         # Encontrar indices por nombre — buscar primera y segunda ocurrencia
-        fecha_idxs  = [i for i,h in enumerate(headers) if h == "fecha"]
-        monto_idxs  = [i for i,h in enumerate(headers) if h in ["monto","amount","importe","total"]]
-        conc_idxs   = [i for i,h in enumerate(headers) if h in ["concepto","categoria","descripcion","category"]]
+        fecha_idxs = [i for i,h in enumerate(headers) if h == "fecha"]
+        monto_idxs = [i for i,h in enumerate(headers) if h in ["monto","amount","importe","total"]]
+        conc_idxs  = [i for i,h in enumerate(headers) if h in ["concepto","categoria","categoría","descripcion","category"]]
 
         egr_fecha = fecha_idxs[0] if len(fecha_idxs) > 0 else None
         egr_monto = monto_idxs[0] if len(monto_idxs) > 0 else None
@@ -92,13 +92,15 @@ def parse_planilla(f):
         ing_monto = monto_idxs[1] if len(monto_idxs) > 1 else None
 
         def clean_fecha(s):
-            parsed = pd.to_datetime(s, errors="coerce", dayfirst=True)
-            # Si falla, intentar formato explícito DD/MM/YYYY
+            # Convertir todo a string primero para unificar timestamps y texto
+            s_str = s.apply(lambda x: x.strftime("%d/%m/%Y") if hasattr(x, "strftime") else str(x).strip())
+            parsed = pd.to_datetime(s_str, errors="coerce", dayfirst=True)
             mask = parsed.isna()
             if mask.any():
-                parsed[mask] = pd.to_datetime(s[mask], errors="coerce", format="%d/%m/%Y")
+                parsed[mask] = pd.to_datetime(s_str[mask], errors="coerce", format="%d/%m/%Y")
             if parsed.isna().any():
-                parsed = pd.to_datetime(s, errors="coerce", format="%d/%m/%y")
+                parsed2 = pd.to_datetime(s_str, errors="coerce", format="%d/%m/%y")
+                parsed = parsed.fillna(parsed2)
             return parsed
 
         def clean_monto(s):
