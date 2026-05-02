@@ -444,48 +444,64 @@ with tab2:
     st.markdown('<p class="section-title">Análisis de Inversión & Amortización</p>', unsafe_allow_html=True)
 
     # Configuración
-    inv_col1, inv_col2, inv_col3 = st.columns(3)
+    inv_col1, inv_col2, inv_col3, inv_col4 = st.columns(4)
     with inv_col1:
         inversion = st.number_input("💵 Inversión inicial ($)", value=480000, step=10000, min_value=0)
     with inv_col2:
+        depreciacion = st.number_input("📉 Pérdida de valor anual (%)", value=15, step=1, min_value=0, max_value=50)
+    with inv_col3:
         plazo_sel = st.selectbox("⏱ Escenario de recupero", [24,30,36,42,48,54,60],
                                   format_func=lambda m: f"{m} meses ({m//12} años)" if m%12==0 else f"{m} meses ({m//12} a. {m%12} m.)")
-    with inv_col3:
+    with inv_col4:
         ganancia_mensual_real = round(tn / len(all_months), 0) if all_months and tn else 0
-        st.metric("📈 Ganancia mensual promedio real", fmt(ganancia_mensual_real))
+        st.metric("📈 Ganancia mensual promedio", fmt(ganancia_mensual_real))
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+    def valor_residual(inv, dep_anual_pct, meses):
+        """Valor de reventa al final del plazo usando depreciación compuesta anual"""
+        anos = meses / 12
+        return round(inv * ((1 - dep_anual_pct/100) ** anos), 0)
+
+    def inversion_neta(inv, dep_anual_pct, meses):
+        """Lo que realmente hay que recuperar = inversión - valor residual"""
+        return max(inv - valor_residual(inv, dep_anual_pct, meses), 0)
 
     # Calcular todos los escenarios
     plazos = [24,30,36,42,48,54,60]
     escenarios = []
     for p in plazos:
-        cuota = round(inversion / p, 0)
-        ganancia_necesaria = cuota
+        vr = valor_residual(inversion, depreciacion, p)
+        inv_neta = inversion_neta(inversion, depreciacion, p)
+        cuota = round(inv_neta / p, 0)
         alcanzable = ganancia_mensual_real >= cuota
-        meses_reales = round(inversion / ganancia_mensual_real, 1) if ganancia_mensual_real > 0 else None
         escenarios.append({
             "Plazo": f"{p} meses",
+            "Valor residual": fmt(vr),
+            "A recuperar (neto)": fmt(inv_neta),
             "Cuota mensual necesaria": fmt(cuota),
-            "Ganancia actual promedio": fmt(ganancia_mensual_real),
+            "Ganancia actual": fmt(ganancia_mensual_real),
             "¿Alcanzable?": "✅ Sí" if alcanzable else "❌ No",
         })
 
-    # KPIs inversión
-    cuota_sel = round(inversion / plazo_sel, 0)
-    meses_reales = round(inversion / ganancia_mensual_real, 1) if ganancia_mensual_real > 0 else None
+    # Valores para escenario seleccionado
+    vr_sel = valor_residual(inversion, depreciacion, plazo_sel)
+    inv_neta_sel = inversion_neta(inversion, depreciacion, plazo_sel)
+    cuota_sel = round(inv_neta_sel / plazo_sel, 0)
+    meses_reales = round(inv_neta_sel / ganancia_mensual_real, 1) if ganancia_mensual_real > 0 else None
     recuperado = sum(nv)
-    pct_recuperado = round(recuperado / inversion * 100, 1) if inversion else 0
+    pct_recuperado = round(recuperado / inv_neta_sel * 100, 1) if inv_neta_sel else 0
 
-    ki1, ki2, ki3, ki4 = st.columns(4)
+    ki1, ki2, ki3, ki4, ki5 = st.columns(5)
     with ki1:
         st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Inversión inicial</p><p class="kpi-value">{fmt(inversion)}</p><p class="kpi-delta neu">Costo del vehículo</p></div>''', unsafe_allow_html=True)
     with ki2:
-        st.markdown(f'''<div class="kpi-card amber"><p class="kpi-label">Cuota escenario {plazo_sel}m</p><p class="kpi-value">{fmt(cuota_sel)}</p><p class="kpi-delta neu">Por mes necesario</p></div>''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="kpi-card amber"><p class="kpi-label">Valor residual ({plazo_sel}m)</p><p class="kpi-value">{fmt(vr_sel)}</p><p class="kpi-delta neu">Reventa estimada</p></div>''', unsafe_allow_html=True)
     with ki3:
-        color_rec = "green" if pct_recuperado >= 50 else "amber" if pct_recuperado > 0 else "red"
-        st.markdown(f'''<div class="kpi-card {color_rec}"><p class="kpi-label">Recuperado hasta hoy</p><p class="kpi-value">{fmt(recuperado)}</p><p class="kpi-delta neu">{pct_recuperado}% de la inversión</p></div>''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="kpi-card amber"><p class="kpi-label">A recuperar (neto)</p><p class="kpi-value">{fmt(inv_neta_sel)}</p><p class="kpi-delta neu">Inversión − residual</p></div>''', unsafe_allow_html=True)
     with ki4:
+        st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Cuota mensual necesaria</p><p class="kpi-value">{fmt(cuota_sel)}</p><p class="kpi-delta neu">Para {plazo_sel} meses</p></div>''', unsafe_allow_html=True)
+    with ki5:
         if meses_reales:
             anos = int(meses_reales // 12); meses_r = int(meses_reales % 12)
             lbl = f"{anos} a. {meses_r} m." if anos > 0 else f"{int(meses_reales)} m."
@@ -501,14 +517,14 @@ with tab2:
 
     meses_proj = list(range(1, plazo_sel + 1))
     acum_necesario = [cuota_sel * m for m in meses_proj]
-    acum_real = [min(ganancia_mensual_real * m, inversion) for m in meses_proj]
+    acum_real = [min(ganancia_mensual_real * m, inv_neta_sel) for m in meses_proj]
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(meses_proj, acum_necesario, color="#c9a844", linewidth=2.5, linestyle="--",
             label=f"Necesario ({plazo_sel}m)", marker="")
     ax.plot(meses_proj, acum_real, color=CN, linewidth=2.5,
             label=f"Al ritmo actual ({fmt(ganancia_mensual_real)}/mes)", marker="")
-    ax.axhline(inversion, color=CE, linewidth=1.5, linestyle=":", label=f"Inversión {fmt(inversion)}")
+    ax.axhline(inv_neta_sel, color=CE, linewidth=1.5, linestyle=":", label=f"A recuperar neto {fmt(inv_neta_sel)}")
     ax.fill_between(meses_proj, acum_real, acum_necesario,
                     where=[r<n for r,n in zip(acum_real, acum_necesario)],
                     alpha=0.08, color=CE, label="Brecha")
@@ -541,5 +557,5 @@ with tab2:
         {pct_recuperado}%
       </div>
     </div>
-    <p style="font-size:12px;color:#888;margin:0;">{fmt(recuperado)} recuperados de {fmt(inversion)}</p>
+    <p style="font-size:12px;color:#888;margin:0;">{fmt(recuperado)} recuperados de {fmt(inv_neta_sel)} (neto) · Valor residual estimado: {fmt(vr_sel)}</p>
     """, unsafe_allow_html=True)
