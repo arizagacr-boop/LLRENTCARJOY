@@ -25,7 +25,9 @@ st.markdown("""
     .stButton button { background: #1a1aff !important; color: #ffffff !important; border: none !important; border-radius: 10px !important; font-weight: 600 !important; }
     .stAlert { border-radius: 10px !important; background-color: #0a0a2e !important; border-left: 3px solid #1a1aff !important; }
     .stSelectbox > div > div { background-color: #0a0a2e !important; border: 1px solid #1a1aff33 !important; border-radius: 8px !important; }
-    .stMultiSelect > div { background-color: #0a0a2e !important; border: 1px solid #1a1aff33 !important; border-radius: 8px !important; }
+    .stMultiSelect > div { background-color: #111111 !important; border: 1px solid #c9a84433 !important; border-radius: 8px !important; }
+    .stMultiSelect span[data-baseweb="tag"] { background-color: #c9a84422 !important; border: 1px solid #c9a844 !important; color: #c9a844 !important; border-radius: 6px !important; }
+    .stMultiSelect span[data-baseweb="tag"] span { color: #c9a844 !important; }
     .stDataFrame { border: 1px solid #1a1aff33 !important; border-radius: 12px !important; }
     .streamlit-expanderHeader { color: #7a94ff !important; background-color: #0a0a2e !important; border: 1px solid #1a1aff33 !important; border-radius: 10px !important; }
     hr { border-color: #1a1aff22 !important; }
@@ -300,8 +302,8 @@ with st.sidebar:
     planilla_file = st.file_uploader("Subí tu planilla Excel o CSV", type=["xlsx","xls","csv"], key="planilla")
     st.markdown("---")
     st.markdown("**📅 Período**")
-    year_sel = st.selectbox("Año", ["Todos", 2025, 2026, 2027], index=0)
-    months_sel = st.selectbox("Mes", ["Todos"] + list(range(1,13)), format_func=lambda m: "Todos los meses" if m == "Todos" else MONTHS_ES[m])
+    year_sel = st.multiselect("Año", [2024, 2025, 2026, 2027], default=[2025, 2026], format_func=str)
+    months_sel = st.multiselect("Mes", list(range(1,13)), default=list(range(1,13)), format_func=lambda m: MONTHS_ES[m])
     st.markdown("---")
     with st.expander("📌 Formato esperado"):
         st.markdown("""
@@ -336,16 +338,17 @@ if ing_df.empty and egr_df.empty:
 hoy = datetime.now()
 mes_actual = pd.Timestamp(hoy.year, hoy.month, 1)
 
-if year_sel != "Todos":
-    if not ing_df.empty: ing_df = ing_df[ing_df["fecha"].dt.year == year_sel]
-    if not egr_df.empty: egr_df = egr_df[egr_df["fecha"].dt.year == year_sel]
+if year_sel:
+    if not ing_df.empty: ing_df = ing_df[ing_df["fecha"].dt.year.isin(year_sel)]
+    if not egr_df.empty: egr_df = egr_df[egr_df["fecha"].dt.year.isin(year_sel)]
 
 # Siempre cortar meses futuros
 if not ing_df.empty: ing_df = ing_df[ing_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
 if not egr_df.empty: egr_df = egr_df[egr_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
 
-if year_sel == "Todos":
-    # Agrupar por año+mes
+# Si hay múltiples años seleccionados, agrupar por año+mes para ver la evolución completa
+anos_distintos = ing_df["fecha"].dt.year.nunique() if not ing_df.empty else 0
+if not ing_df.empty and anos_distintos > 1:
     def agg_yearmonth(df):
         if df.empty: return {}
         d = df.copy()
@@ -357,7 +360,7 @@ if year_sel == "Todos":
 else:
     im = agg_monthly(ing_df); em = agg_monthly(egr_df)
     all_months_raw = sorted(set(list(im.keys()) + list(em.keys())))
-    if months_sel != "Todos": all_months_raw = [m for m in all_months_raw if m == months_sel]
+    if months_sel: all_months_raw = [m for m in all_months_raw if m in months_sel]
     all_months = all_months_raw
     months_labels = [MONTHS_ES[m] for m in all_months]
 
