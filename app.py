@@ -263,7 +263,7 @@ def build_excel(months, ing, egr, net, year):
         c.alignment=Alignment(horizontal="center"); c.border=brd
     for i,m in enumerate(months):
         r=i+2; iv=ing[i]; ev=egr[i]; nv=net[i]; mg=round(nv/iv*100,1) if iv else 0
-        for j,v in enumerate([MONTHS_ES[m],iv,ev,nv,mg],1):
+        for j,v in enumerate([m,iv,ev,nv,mg],1):
             c=ws.cell(row=r,column=j,value=v); c.font=Font(name="Calibri"); c.border=brd
             if j==1: c.alignment=Alignment(horizontal="center")
             elif j in [2,3,4]: c.number_format="#,##0"; c.alignment=Alignment(horizontal="right")
