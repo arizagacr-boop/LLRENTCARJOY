@@ -464,8 +464,10 @@ with tab2:
     inv_col1, inv_col2, inv_col3, inv_col4 = st.columns(4)
     with inv_col1:
         inversion = st.number_input("💵 Inversión inicial ($)", value=480000, step=10000, min_value=0, format="%d")
+        st.caption(f"📌 {fmt(inversion)}")
     with inv_col2:
         depreciacion = st.number_input("📉 Pérdida de valor anual (%)", value=15, step=1, min_value=0, max_value=50)
+        st.caption(f"📌 {depreciacion}% anual")
     with inv_col3:
         plazo_sel = st.selectbox("⏱ Escenario de recupero", [24,30,36,42,48,54,60],
                                   format_func=lambda m: f"{m} meses ({m//12} años)" if m%12==0 else f"{m} meses ({m//12} a. {m%12} m.)")
