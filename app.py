@@ -127,6 +127,10 @@ def parse_planilla(f):
                 tmp["concepto"] = tmp["concepto"].fillna("Sin categoría").astype(str).str.strip()
                 noise = ["agregar peajes","agregar seguro","mas gastos ?","nan","","none"]
                 tmp = tmp[~tmp["concepto"].str.lower().isin(noise)]
+                # Agrupar categorías con prefijo "mantenimiento"
+                tmp["concepto"] = tmp["concepto"].apply(
+                    lambda x: "Mantenimiento" if "mantenimiento" in str(x).lower() else x
+                )
             egr_df = tmp
 
         # DF ingresos
@@ -314,14 +318,19 @@ Ambas secciones en la **misma hoja**.
     st.caption("LL Rent a Car Joy · v2.0")
 
 # ── DATOS ──────────────────────────────────────────────────────────────────────
-using_demo = planilla_file is None
-if using_demo:
-    ing_df, egr_df = get_demo()
-    st.info("📊 Mostrando **datos de ejemplo**. Cargá tu planilla en el panel lateral para ver tus números reales.")
-else:
-    ing_df, egr_df = parse_planilla(planilla_file)
-    if ing_df.empty and egr_df.empty:
-        st.warning("No se pudieron leer los datos. Revisá el formato de tu planilla."); st.stop()
+if planilla_file is None:
+    st.markdown("""
+    <div style="background:#111111;border:1px dashed #c9a84455;border-radius:14px;padding:3rem;text-align:center;margin-top:2rem;">
+      <div style="font-size:3rem;margin-bottom:1rem;">📂</div>
+      <div style="font-size:1.2rem;font-weight:600;color:#c9a844;margin-bottom:0.5rem;">Cargá tu planilla para comenzar</div>
+      <div style="font-size:13px;color:#888;">Subí tu archivo Excel o CSV desde el panel lateral</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+ing_df, egr_df = parse_planilla(planilla_file)
+if ing_df.empty and egr_df.empty:
+    st.warning("No se pudieron leer los datos. Revisá el formato de tu planilla."); st.stop()
 
 # Filtrar por año y cortar en el mes actual (no mostrar meses futuros)
 hoy = datetime.now()
@@ -416,7 +425,7 @@ with tab1:
     rows = []
     for i,m in enumerate(all_months):
         i_=iv[i]; e_=ev[i]; n_=nv[i]; mg_=round(n_/i_*100,1) if i_ else 0
-        est="✅ Excelente" if n_>0 and mg_>=30 else "🟡 Positivo" if n_>0 else "🔴 Negativo"
+        est="✅" if n_>0 else "❌"
         rows.append({"Mes":months_labels[i],"Ingresos":fmt(i_),"Egresos":fmt(e_),"Ganancia neta":fmt(n_),"Margen":f"{mg_}%","Estado":est})
     rows.append({"Mes":"TOTAL","Ingresos":fmt(ti),"Egresos":fmt(te),"Ganancia neta":fmt(tn),"Margen":f"{mg}%","Estado":"—"})
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -424,8 +433,8 @@ with tab1:
     # Tabla categorías
     if not egr_df.empty and "concepto" in egr_df.columns:
         st.markdown('<p class="section-title">Detalle de egresos por categoría</p>', unsafe_allow_html=True)
-        cat_rows = egr_df.groupby("concepto")["monto"].agg(["sum","count"]).reset_index()
-        cat_rows.columns = ["Categoría","Total","Cantidad"]
+        cat_rows = egr_df.groupby("concepto")["monto"].sum().reset_index()
+        cat_rows.columns = ["Categoría","Total"]
         cat_rows = cat_rows.sort_values("Total", ascending=False)
         cat_rows["Total"] = cat_rows["Total"].apply(fmt)
         st.dataframe(cat_rows, use_container_width=True, hide_index=True)
@@ -454,7 +463,7 @@ with tab2:
     # Configuración
     inv_col1, inv_col2, inv_col3, inv_col4 = st.columns(4)
     with inv_col1:
-        inversion = st.number_input("💵 Inversión inicial ($)", value=480000, step=10000, min_value=0)
+        inversion = st.number_input("💵 Inversión inicial ($)", value=480000, step=10000, min_value=0, format="%d")
     with inv_col2:
         depreciacion = st.number_input("📉 Pérdida de valor anual (%)", value=15, step=1, min_value=0, max_value=50)
     with inv_col3:
