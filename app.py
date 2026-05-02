@@ -323,10 +323,17 @@ else:
     if ing_df.empty and egr_df.empty:
         st.warning("No se pudieron leer los datos. Revisá el formato de tu planilla."); st.stop()
 
-# Filtrar por año
+# Filtrar por año y cortar en el mes actual (no mostrar meses futuros)
+hoy = datetime.now()
+mes_actual = pd.Timestamp(hoy.year, hoy.month, 1)
+
 if year_sel != "Todos":
     if not ing_df.empty: ing_df = ing_df[ing_df["fecha"].dt.year == year_sel]
     if not egr_df.empty: egr_df = egr_df[egr_df["fecha"].dt.year == year_sel]
+
+# Siempre cortar meses futuros
+if not ing_df.empty: ing_df = ing_df[ing_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
+if not egr_df.empty: egr_df = egr_df[egr_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
 
 if year_sel == "Todos":
     # Agrupar por año+mes
@@ -368,7 +375,8 @@ with tab1:
     st.markdown('<p class="section-title">Resumen del período</p>', unsafe_allow_html=True)
     k1,k2,k3,k4 = st.columns(4)
     with k1:
-        st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Ingresos totales</p><p class="kpi-value">{fmt(ti)}</p><p class="kpi-delta neu">{len(all_months)} meses analizados</p></div>''', unsafe_allow_html=True)
+        meses_con_ingresos = sum(1 for v in iv if v > 0)
+        st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Ingresos totales</p><p class="kpi-value">{fmt(ti)}</p><p class="kpi-delta neu">{meses_con_ingresos} meses con ingresos</p></div>''', unsafe_allow_html=True)
     with k2:
         pe = round(te/ti*100) if ti else 0
         st.markdown(f'''<div class="kpi-card red"><p class="kpi-label">Egresos totales</p><p class="kpi-value">{fmt(te)}</p><p class="kpi-delta neu">{pe}% de los ingresos</p></div>''', unsafe_allow_html=True)
