@@ -26,8 +26,9 @@ st.markdown("""
     .stAlert { border-radius: 10px !important; background-color: #0a0a2e !important; border-left: 3px solid #1a1aff !important; }
     .stSelectbox > div > div { background-color: #0a0a2e !important; border: 1px solid #1a1aff33 !important; border-radius: 8px !important; }
     .stMultiSelect > div { background-color: #111111 !important; border: 1px solid #c9a84433 !important; border-radius: 8px !important; }
-    .stMultiSelect span[data-baseweb="tag"] { background-color: #c9a84422 !important; border: 1px solid #c9a844 !important; color: #c9a844 !important; border-radius: 6px !important; }
-    .stMultiSelect span[data-baseweb="tag"] span { color: #c9a844 !important; }
+    span[data-baseweb="tag"] { background-color: #1a1a1a !important; border: 1px solid #c9a844 !important; border-radius: 6px !important; }
+    span[data-baseweb="tag"] span { color: #c9a844 !important; }
+    span[data-baseweb="tag"] svg { fill: #c9a844 !important; }
     .stDataFrame { border: 1px solid #1a1aff33 !important; border-radius: 12px !important; }
     .streamlit-expanderHeader { color: #7a94ff !important; background-color: #0a0a2e !important; border: 1px solid #1a1aff33 !important; border-radius: 10px !important; }
     hr { border-color: #1a1aff22 !important; }
@@ -302,8 +303,10 @@ with st.sidebar:
     planilla_file = st.file_uploader("Subí tu planilla Excel o CSV", type=["xlsx","xls","csv"], key="planilla")
     st.markdown("---")
     st.markdown("**📅 Período**")
-    year_sel = st.multiselect("Año", [2024, 2025, 2026, 2027], default=[2025, 2026], format_func=str)
+    year_sel = st.multiselect("Año", [2025, 2026, 2027], default=[2025, 2026], format_func=str)
+    if not year_sel: year_sel = [2025, 2026, 2027]
     months_sel = st.multiselect("Mes", list(range(1,13)), default=list(range(1,13)), format_func=lambda m: MONTHS_ES[m])
+    if not months_sel: months_sel = list(range(1,13))
     st.markdown("---")
     with st.expander("📌 Formato esperado"):
         st.markdown("""
@@ -346,9 +349,12 @@ if year_sel:
 if not ing_df.empty: ing_df = ing_df[ing_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
 if not egr_df.empty: egr_df = egr_df[egr_df["fecha"] < mes_actual + pd.offsets.MonthEnd(1)]
 
-# Si hay múltiples años seleccionados, agrupar por año+mes para ver la evolución completa
-anos_distintos = ing_df["fecha"].dt.year.nunique() if not ing_df.empty else 0
-if not ing_df.empty and anos_distintos > 1:
+# Si hay múltiples años, mostrar eje año-mes; si es uno solo, mostrar solo mes
+anos_en_datos = set()
+if not ing_df.empty: anos_en_datos.update(ing_df["fecha"].dt.year.unique())
+if not egr_df.empty: anos_en_datos.update(egr_df["fecha"].dt.year.unique())
+
+if len(anos_en_datos) > 1:
     def agg_yearmonth(df):
         if df.empty: return {}
         d = df.copy()
