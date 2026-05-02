@@ -301,7 +301,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**📅 Período**")
     year_sel = st.selectbox("Año", ["Todos", 2025, 2026, 2027], index=0)
-    months_sel = st.multiselect("Meses", list(range(1,13)), default=list(range(1,13)), format_func=lambda m: MONTHS_ES[m])
+    months_sel = st.selectbox("Mes", ["Todos"] + list(range(1,13)), format_func=lambda m: "Todos los meses" if m == "Todos" else MONTHS_ES[m])
     st.markdown("---")
     with st.expander("📌 Formato esperado"):
         st.markdown("""
@@ -357,7 +357,7 @@ if year_sel == "Todos":
 else:
     im = agg_monthly(ing_df); em = agg_monthly(egr_df)
     all_months_raw = sorted(set(list(im.keys()) + list(em.keys())))
-    if months_sel: all_months_raw = [m for m in all_months_raw if m in months_sel]
+    if months_sel != "Todos": all_months_raw = [m for m in all_months_raw if m == months_sel]
     all_months = all_months_raw
     months_labels = [MONTHS_ES[m] for m in all_months]
 
