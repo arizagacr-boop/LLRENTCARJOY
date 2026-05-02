@@ -357,74 +357,189 @@ peor_idx  = nv.index(min(nv)) if nv else 0
 mejor_lbl = months_labels[mejor_idx]
 peor_lbl  = months_labels[peor_idx]
 
-# ── KPIs ───────────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-title">Resumen del período</p>', unsafe_allow_html=True)
-k1,k2,k3,k4 = st.columns(4)
-with k1:
-    st.markdown(f'<div class="kpi-card"><p class="kpi-label">Ingresos totales</p><p class="kpi-value">{fmt(ti)}</p><p class="kpi-delta neu">{len(all_months)} meses analizados</p></div>', unsafe_allow_html=True)
-with k2:
-    pe = round(te/ti*100) if ti else 0
-    st.markdown(f'<div class="kpi-card red"><p class="kpi-label">Egresos totales</p><p class="kpi-value">{fmt(te)}</p><p class="kpi-delta neu">{pe}% de los ingresos</p></div>', unsafe_allow_html=True)
-with k3:
-    cc="green" if tn>=0 else "red"; ic="▲ Rentable" if tn>=0 else "▼ En pérdida"; dc="pos" if tn>=0 else "neg"
-    st.markdown(f'<div class="kpi-card {cc}"><p class="kpi-label">Ganancia neta</p><p class="kpi-value">{fmt(tn)}</p><p class="kpi-delta {dc}">{ic}</p></div>', unsafe_allow_html=True)
-with k4:
-    mc="green" if mg>=30 else "amber" if mg>0 else "red"
-    st.markdown(f'<div class="kpi-card {mc}"><p class="kpi-label">Margen neto</p><p class="kpi-value">{mg}%</p><p class="kpi-delta neu">Mejor: {mejor_lbl} · Peor: {peor_lbl}</p></div>', unsafe_allow_html=True)
+tab1, tab2 = st.tabs(["📊  Ingresos & Egresos", "💰  Recupero de Inversión"])
 
-st.markdown("<br>", unsafe_allow_html=True)
+# ═══════════════════════════════════════════════════════════════
+# TAB 1 — INGRESOS & EGRESOS
+# ═══════════════════════════════════════════════════════════════
+with tab1:
 
-# ── CHART PRINCIPAL ────────────────────────────────────────────────────────────
-st.markdown('<p class="section-title">Ingresos vs Egresos</p>', unsafe_allow_html=True)
-st.image(chart_main(months_labels, iv, ev, nv), use_container_width=True)
+    # KPIs
+    st.markdown('<p class="section-title">Resumen del período</p>', unsafe_allow_html=True)
+    k1,k2,k3,k4 = st.columns(4)
+    with k1:
+        st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Ingresos totales</p><p class="kpi-value">{fmt(ti)}</p><p class="kpi-delta neu">{len(all_months)} meses analizados</p></div>''', unsafe_allow_html=True)
+    with k2:
+        pe = round(te/ti*100) if ti else 0
+        st.markdown(f'''<div class="kpi-card red"><p class="kpi-label">Egresos totales</p><p class="kpi-value">{fmt(te)}</p><p class="kpi-delta neu">{pe}% de los ingresos</p></div>''', unsafe_allow_html=True)
+    with k3:
+        cc="green" if tn>=0 else "red"; ic="▲ Rentable" if tn>=0 else "▼ En pérdida"; dc="pos" if tn>=0 else "neg"
+        st.markdown(f'''<div class="kpi-card {cc}"><p class="kpi-label">Ganancia neta</p><p class="kpi-value">{fmt(tn)}</p><p class="kpi-delta {dc}">{ic}</p></div>''', unsafe_allow_html=True)
+    with k4:
+        mc="green" if mg>=30 else "amber" if mg>0 else "red"
+        st.markdown(f'''<div class="kpi-card {mc}"><p class="kpi-label">Margen neto</p><p class="kpi-value">{mg}%</p><p class="kpi-delta neu">Mejor: {mejor_lbl} · Peor: {peor_lbl}</p></div>''', unsafe_allow_html=True)
 
-# ── CHARTS SECUNDARIOS ─────────────────────────────────────────────────────────
-st.markdown('<p class="section-title">Análisis detallado</p>', unsafe_allow_html=True)
-c1,c2 = st.columns(2)
-with c1:
-    st.markdown("**Tendencia acumulada**")
-    st.image(chart_acum(months_labels, nv), use_container_width=True)
-with c2:
-    st.markdown("**Margen mensual (%)**")
-    st.image(chart_margen(months_labels, iv, nv), use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-# ── CATEGORÍAS EGRESOS ────────────────────────────────────────────────────────
-if not egr_df.empty and "concepto" in egr_df.columns:
-    st.markdown('<p class="section-title">Egresos por categoría</p>', unsafe_allow_html=True)
-    cat_img = chart_categorias(egr_df)
-    if cat_img:
-        st.image(cat_img, use_container_width=True)
+    # Chart principal
+    st.markdown('<p class="section-title">Ingresos vs Egresos</p>', unsafe_allow_html=True)
+    st.image(chart_main(months_labels, iv, ev, nv), use_container_width=True)
 
-# ── TABLA ──────────────────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown('<p class="section-title">Detalle mensual</p>', unsafe_allow_html=True)
-rows = []
-for i,m in enumerate(all_months):
-    i_=iv[i]; e_=ev[i]; n_=nv[i]; mg_=round(n_/i_*100,1) if i_ else 0
-    est="✅ Excelente" if n_>0 and mg_>=30 else "🟡 Positivo" if n_>0 else "🔴 Negativo"
-    rows.append({"Mes":months_labels[i],"Ingresos":fmt(i_),"Egresos":fmt(e_),"Ganancia neta":fmt(n_),"Margen":f"{mg_}%","Estado":est})
-rows.append({"Mes":"TOTAL","Ingresos":fmt(ti),"Egresos":fmt(te),"Ganancia neta":fmt(tn),"Margen":f"{mg}%","Estado":"—"})
-st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    # Charts secundarios
+    st.markdown('<p class="section-title">Análisis detallado</p>', unsafe_allow_html=True)
+    c1,c2 = st.columns(2)
+    with c1:
+        st.markdown("**Tendencia acumulada**")
+        st.image(chart_acum(months_labels, nv), use_container_width=True)
+    with c2:
+        st.markdown("**Margen mensual (%)**")
+        st.image(chart_margen(months_labels, iv, nv), use_container_width=True)
 
-# ── TABLA CATEGORÍAS ──────────────────────────────────────────────────────────
-if not egr_df.empty and "concepto" in egr_df.columns:
-    st.markdown('<p class="section-title">Detalle de egresos por categoría</p>', unsafe_allow_html=True)
-    cat_rows = egr_df.groupby("concepto")["monto"].agg(["sum","count"]).reset_index()
-    cat_rows.columns = ["Categoría","Total","Cantidad"]
-    cat_rows = cat_rows.sort_values("Total", ascending=False)
-    cat_rows["Total"] = cat_rows["Total"].apply(fmt)
-    st.dataframe(cat_rows, use_container_width=True, hide_index=True)
+    # Categorías
+    if not egr_df.empty and "concepto" in egr_df.columns:
+        st.markdown('<p class="section-title">Egresos por categoría</p>', unsafe_allow_html=True)
+        cat_img = chart_categorias(egr_df)
+        if cat_img:
+            st.image(cat_img, use_container_width=True)
 
-# ── EXPORT ─────────────────────────────────────────────────────────────────────
-st.markdown("---")
-col_dl, col_info = st.columns([1,3])
-with col_dl:
-    st.download_button(
-        label="⬇️ Descargar Excel",
-        data=build_excel(all_months, iv, ev, nv, year_sel),
-        file_name=f"ll_rent_a_car_joy_{year_sel}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-with col_info:
-    now = datetime.now().strftime("%d/%m/%Y %H:%M")
-    st.caption(f"Reporte generado el {now} · LL Rent a Car Joy")
+    # Tabla mensual
+    st.markdown("---")
+    st.markdown('<p class="section-title">Detalle mensual</p>', unsafe_allow_html=True)
+    rows = []
+    for i,m in enumerate(all_months):
+        i_=iv[i]; e_=ev[i]; n_=nv[i]; mg_=round(n_/i_*100,1) if i_ else 0
+        est="✅ Excelente" if n_>0 and mg_>=30 else "🟡 Positivo" if n_>0 else "🔴 Negativo"
+        rows.append({"Mes":months_labels[i],"Ingresos":fmt(i_),"Egresos":fmt(e_),"Ganancia neta":fmt(n_),"Margen":f"{mg_}%","Estado":est})
+    rows.append({"Mes":"TOTAL","Ingresos":fmt(ti),"Egresos":fmt(te),"Ganancia neta":fmt(tn),"Margen":f"{mg}%","Estado":"—"})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # Tabla categorías
+    if not egr_df.empty and "concepto" in egr_df.columns:
+        st.markdown('<p class="section-title">Detalle de egresos por categoría</p>', unsafe_allow_html=True)
+        cat_rows = egr_df.groupby("concepto")["monto"].agg(["sum","count"]).reset_index()
+        cat_rows.columns = ["Categoría","Total","Cantidad"]
+        cat_rows = cat_rows.sort_values("Total", ascending=False)
+        cat_rows["Total"] = cat_rows["Total"].apply(fmt)
+        st.dataframe(cat_rows, use_container_width=True, hide_index=True)
+
+    # Export
+    st.markdown("---")
+    col_dl, col_info = st.columns([1,3])
+    with col_dl:
+        st.download_button(
+            label="⬇️ Descargar Excel",
+            data=build_excel(months_labels, iv, ev, nv, year_sel),
+            file_name=f"ll_rent_a_car_joy_{year_sel}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    with col_info:
+        now = datetime.now().strftime("%d/%m/%Y %H:%M")
+        st.caption(f"Reporte generado el {now} · LL Rent a Car Joy")
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 2 — RECUPERO DE INVERSIÓN
+# ═══════════════════════════════════════════════════════════════
+with tab2:
+
+    st.markdown('<p class="section-title">Análisis de Inversión & Amortización</p>', unsafe_allow_html=True)
+
+    # Configuración
+    inv_col1, inv_col2, inv_col3 = st.columns(3)
+    with inv_col1:
+        inversion = st.number_input("💵 Inversión inicial ($)", value=480000, step=10000, min_value=0)
+    with inv_col2:
+        plazo_sel = st.selectbox("⏱ Escenario de recupero", [24,30,36,42,48,54,60],
+                                  format_func=lambda m: f"{m} meses ({m//12} años)" if m%12==0 else f"{m} meses ({m//12} a. {m%12} m.)")
+    with inv_col3:
+        ganancia_mensual_real = round(tn / len(all_months), 0) if all_months and tn else 0
+        st.metric("📈 Ganancia mensual promedio real", fmt(ganancia_mensual_real))
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Calcular todos los escenarios
+    plazos = [24,30,36,42,48,54,60]
+    escenarios = []
+    for p in plazos:
+        cuota = round(inversion / p, 0)
+        ganancia_necesaria = cuota
+        alcanzable = ganancia_mensual_real >= cuota
+        meses_reales = round(inversion / ganancia_mensual_real, 1) if ganancia_mensual_real > 0 else None
+        escenarios.append({
+            "Plazo": f"{p} meses",
+            "Cuota mensual necesaria": fmt(cuota),
+            "Ganancia actual promedio": fmt(ganancia_mensual_real),
+            "¿Alcanzable?": "✅ Sí" if alcanzable else "❌ No",
+        })
+
+    # KPIs inversión
+    cuota_sel = round(inversion / plazo_sel, 0)
+    meses_reales = round(inversion / ganancia_mensual_real, 1) if ganancia_mensual_real > 0 else None
+    recuperado = sum(nv)
+    pct_recuperado = round(recuperado / inversion * 100, 1) if inversion else 0
+
+    ki1, ki2, ki3, ki4 = st.columns(4)
+    with ki1:
+        st.markdown(f'''<div class="kpi-card"><p class="kpi-label">Inversión inicial</p><p class="kpi-value">{fmt(inversion)}</p><p class="kpi-delta neu">Costo del vehículo</p></div>''', unsafe_allow_html=True)
+    with ki2:
+        st.markdown(f'''<div class="kpi-card amber"><p class="kpi-label">Cuota escenario {plazo_sel}m</p><p class="kpi-value">{fmt(cuota_sel)}</p><p class="kpi-delta neu">Por mes necesario</p></div>''', unsafe_allow_html=True)
+    with ki3:
+        color_rec = "green" if pct_recuperado >= 50 else "amber" if pct_recuperado > 0 else "red"
+        st.markdown(f'''<div class="kpi-card {color_rec}"><p class="kpi-label">Recuperado hasta hoy</p><p class="kpi-value">{fmt(recuperado)}</p><p class="kpi-delta neu">{pct_recuperado}% de la inversión</p></div>''', unsafe_allow_html=True)
+    with ki4:
+        if meses_reales:
+            anos = int(meses_reales // 12); meses_r = int(meses_reales % 12)
+            lbl = f"{anos} a. {meses_r} m." if anos > 0 else f"{int(meses_reales)} m."
+            color_r = "green" if meses_reales <= 36 else "amber" if meses_reales <= 48 else "red"
+            st.markdown(f'''<div class="kpi-card {color_r}"><p class="kpi-label">Recupero real estimado</p><p class="kpi-value">{lbl}</p><p class="kpi-delta neu">Al ritmo actual</p></div>''', unsafe_allow_html=True)
+        else:
+            st.markdown(f'''<div class="kpi-card red"><p class="kpi-label">Recupero real estimado</p><p class="kpi-value">—</p><p class="kpi-delta neg">Sin ganancia aún</p></div>''', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Gráfico: proyección de recupero para escenario seleccionado
+    st.markdown(f'<p class="section-title">Proyección de recupero — escenario {plazo_sel} meses</p>', unsafe_allow_html=True)
+
+    meses_proj = list(range(1, plazo_sel + 1))
+    acum_necesario = [cuota_sel * m for m in meses_proj]
+    acum_real = [min(ganancia_mensual_real * m, inversion) for m in meses_proj]
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(meses_proj, acum_necesario, color="#c9a844", linewidth=2.5, linestyle="--",
+            label=f"Necesario ({plazo_sel}m)", marker="")
+    ax.plot(meses_proj, acum_real, color=CN, linewidth=2.5,
+            label=f"Al ritmo actual ({fmt(ganancia_mensual_real)}/mes)", marker="")
+    ax.axhline(inversion, color=CE, linewidth=1.5, linestyle=":", label=f"Inversión {fmt(inversion)}")
+    ax.fill_between(meses_proj, acum_real, acum_necesario,
+                    where=[r<n for r,n in zip(acum_real, acum_necesario)],
+                    alpha=0.08, color=CE, label="Brecha")
+    ax.set_xlabel("Meses", color=TC, fontsize=10)
+    ax.set_ylabel("Acumulado ($)", color=TC, fontsize=10)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"${v/1000:.0f}k"))
+    ax.legend(framealpha=0.1, labelcolor=TC, fontsize=10)
+    ax.grid(axis="y"); ax.set_axisbelow(True)
+    for spine in ax.spines.values(): spine.set_edgecolor("#c9a84420")
+    fig.tight_layout()
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight", facecolor=BG)
+    buf.seek(0); plt.close(fig)
+    st.image(buf, use_container_width=True)
+
+    # Tabla todos los escenarios
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Comparativa de todos los escenarios</p>', unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame(escenarios), use_container_width=True, hide_index=True)
+
+    # Barra de progreso
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Progreso de recupero</p>', unsafe_allow_html=True)
+    pct_clamped = min(pct_recuperado, 100)
+    st.markdown(f"""
+    <div style="background:#1a1a1a;border-radius:10px;padding:4px;border:1px solid #c9a84433;margin-bottom:8px;">
+      <div style="background:linear-gradient(90deg,#c9a844,#f0d080);height:28px;border-radius:8px;
+           width:{pct_clamped}%;display:flex;align-items:center;justify-content:center;
+           font-size:13px;font-weight:600;color:#000;min-width:40px;">
+        {pct_recuperado}%
+      </div>
+    </div>
+    <p style="font-size:12px;color:#888;margin:0;">{fmt(recuperado)} recuperados de {fmt(inversion)}</p>
+    """, unsafe_allow_html=True)
