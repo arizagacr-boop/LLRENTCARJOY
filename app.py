@@ -459,9 +459,10 @@ with tab2:
     st.markdown("<br>", unsafe_allow_html=True)
 
     def valor_residual(inv, dep_anual_pct, meses):
-        """Valor de reventa al final del plazo usando depreciación compuesta anual"""
+        """Valor de reventa al final del plazo usando depreciación lineal simple"""
         anos = meses / 12
-        return round(inv * ((1 - dep_anual_pct/100) ** anos), 0)
+        depreciacion_total = inv * (dep_anual_pct / 100) * anos
+        return max(round(inv - depreciacion_total, 0), 0)
 
     def inversion_neta(inv, dep_anual_pct, meses):
         """Lo que realmente hay que recuperar = inversión - valor residual"""
