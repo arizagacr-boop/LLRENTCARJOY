@@ -303,9 +303,9 @@ with st.sidebar:
     planilla_file = st.file_uploader("Subí tu planilla Excel o CSV", type=["xlsx","xls","csv"], key="planilla")
     st.markdown("---")
     st.markdown("**📅 Período**")
-    year_sel = st.multiselect("Año", [2025, 2026, 2027], default=[2025, 2026], format_func=str)
+    year_sel = st.pills("Año", [2025, 2026, 2027], default=[2025, 2026], selection_mode="multi")
     if not year_sel: year_sel = [2025, 2026, 2027]
-    months_sel = st.multiselect("Mes", list(range(1,13)), default=list(range(1,13)), format_func=lambda m: MONTHS_ES[m])
+    months_sel = st.pills("Mes", list(range(1,13)), default=list(range(1,13)), selection_mode="multi", format_func=lambda m: MONTHS_ES[m])
     if not months_sel: months_sel = list(range(1,13))
     st.markdown("---")
     with st.expander("📌 Formato esperado"):
